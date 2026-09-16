@@ -61,11 +61,16 @@ export class InputController {
       resetStick()
     }, { passive: false })
 
-    // Look area (right side, excluding UI buttons)
+    // Look area (right side, excluding UI buttons). Drag to look; a quick tap jumps.
     const look = document.getElementById('look-area')
+    this._lookMoved = 0
+    this._lookStartTime = 0
     look.addEventListener('touchstart', (e) => {
       if (this._isOnUI(e.target)) return
-      this._lookStart = { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY }
+      const t = e.changedTouches[0]
+      this._lookStart = { x: t.clientX, y: t.clientY }
+      this._lookMoved = 0
+      this._lookStartTime = performance.now()
       this.lookActive = true
     }, { passive: true })
     look.addEventListener('touchmove', (e) => {
@@ -74,14 +79,24 @@ export class InputController {
       const dx = t.clientX - this._lookStart.x
       const dy = t.clientY - this._lookStart.y
       this._lookStart = { x: t.clientX, y: t.clientY }
+      this._lookMoved += Math.abs(dx) + Math.abs(dy)
       // store delta for this frame; consumed by game loop
       this._pendingLookX = (this._pendingLookX || 0) + dx
       this._pendingLookY = (this._pendingLookY || 0) + dy
     }, { passive: true })
-    look.addEventListener('touchend', () => { this.lookActive = false; this._lookStart = null }, { passive: true })
+    look.addEventListener('touchend', () => {
+      this.lookActive = false
+      this._lookStart = null
+      // A quick, still tap in the centre jumps; a drag only looks around.
+      const dt = performance.now() - this._lookStartTime
+      if (this._lookMoved < 12 && dt < 300) this.pulseJump()
+    }, { passive: true })
+  }
 
-    // Jump button (a simple tap on the center area could jump; use a dedicated button)
-    // We add a jump button dynamically in HTML? Use double-tap? Keep minimal: add a jump button.
+  pulseJump() {
+    this.input.jump = true
+    clearTimeout(this._jumpTimer)
+    this._jumpTimer = setTimeout(() => { this.input.jump = false }, 120)
   }
 
   _isOnUI(el) {
