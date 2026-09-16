@@ -88,6 +88,14 @@ export class Game {
     // Generate initial world around player
     this.generateAroundPlayer()
 
+    // Build the chunk under the player synchronously so collision data exists
+    // before physics runs; otherwise the player falls into terrain that appears
+    // a frame or two later and ends up embedded underground.
+    this.ensurePlayerChunk()
+    // If the restored position is inside a solid block, push the player up to
+    // the first free space.
+    this.ensureSafeSpawn()
+
     // Wanderers
     this.sheep = []
     this.spawnSheep()
@@ -395,6 +403,27 @@ export class Game {
     // Once the queued chunks have all built, refresh the power network so
     // restored switches and motors reflect their saved states.
     if (processed > 0 && this.chunkQueue.length === 0) this.recomputePower()
+  }
+
+  // Generate the chunk under the player synchronously at startup so the ground
+  // exists before the physics loop starts. Without this, the player falls into
+  // terrain that appears a frame or two later and can end up underground.
+  ensurePlayerChunk() {
+    const cx = Math.floor(this.player.position.x / CHUNK_SIZE)
+    const cz = Math.floor(this.player.position.z / CHUNK_SIZE)
+    if (!this.world.getChunk(cx, cz)) this.world.generateChunk(cx, cz)
+    this.applyChunkEdits(cx, cz)
+    this.rebuildChunk(cx, cz)
+  }
+
+  // If the (possibly restored) player position intersects a solid block, move
+  // them up until their AABB is clear so they never spawn embedded underground.
+  ensureSafeSpawn() {
+    const p = this.player
+    for (let y = p.position.y; y < WORLD_HEIGHT; y++) {
+      p.position.y = y
+      if (!p.collides(p.position.x, y, p.position.z)) return
+    }
   }
 
   spawnSheep() {
