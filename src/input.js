@@ -74,7 +74,6 @@ export class InputController {
       const dx = t.clientX - this._lookStart.x
       const dy = t.clientY - this._lookStart.y
       this._lookStart = { x: t.clientX, y: t.clientY }
-      this.input.lookX = dy * 0  // handled per-frame by reading
       // store delta for this frame; consumed by game loop
       this._pendingLookX = (this._pendingLookX || 0) + dx
       this._pendingLookY = (this._pendingLookY || 0) + dy

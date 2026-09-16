@@ -2,7 +2,7 @@
 // Movement is driven by a joystick (x,z) and look by touch drag.
 
 import * as THREE from 'three'
-import { World } from './world.js'
+import { World, SEA_LEVEL } from './world.js'
 import { BLOCKS, AIR, WATER } from './blocks.js'
 
 const GRAVITY = 24
@@ -26,9 +26,25 @@ export class Player {
   }
 
   spawn() {
-    // Find ground near origin
-    let h = this.world.heightAt(0, 0)
-    this.position.set(0.5, h + 3, 0.5)
+    // Find dry land (terrain at or above sea level) spiralling outward from origin,
+    // so the player does not spawn submerged in water.
+    let sx = 0, sz = 0
+    let found = false
+    for (let radius = 0; radius < 64 && !found; radius++) {
+      for (let dx = -radius; dx <= radius && !found; dx++) {
+        for (let dz = -radius; dz <= radius && !found; dz++) {
+          if (Math.max(Math.abs(dx), Math.abs(dz)) !== radius) continue
+          if (this.world.heightAt(dx, dz) >= SEA_LEVEL) {
+            sx = dx; sz = dz
+            found = true
+          }
+        }
+      }
+    }
+    if (!found) { sx = 0; sz = 0 }
+    let h = this.world.heightAt(sx, sz)
+    // Spawn 3 blocks above the ground at that column, which is above the water.
+    this.position.set(sx + 0.5, Math.max(h, SEA_LEVEL) + 3, sz + 0.5)
     this.velocity.set(0, 0, 0)
   }
 
@@ -54,9 +70,9 @@ export class Player {
   }
 
   update(dt, input) {
-    // Look
-    this.yaw -= input.lookX * dt
-    this.pitch -= input.lookY * dt
+    // Look (deltas are already scaled per-frame by the input controller)
+    this.yaw -= input.lookX
+    this.pitch -= input.lookY
     this.pitch = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, this.pitch))
 
     // Move direction relative to yaw

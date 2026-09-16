@@ -6,6 +6,7 @@ import { AIR, GRASS, DIRT, STONE, SAND, WOOD, LEAVES, WATER, BEDROCK,
 
 export const CHUNK_SIZE = 16
 export const WORLD_HEIGHT = 64
+export const SEA_LEVEL = 20
 
 // A chunk stores blocks indexed as x + z*16 + y*16*16
 export class Chunk {
@@ -117,9 +118,8 @@ export class World {
           c.set(lx, y, lz, id)
         }
         // water fills up to a fixed sea level
-        const SEA = 28
-        if (h < SEA) {
-          for (let y = h + 1; y <= SEA; y++) c.set(lx, y, lz, WATER)
+        if (h < SEA_LEVEL) {
+          for (let y = h + 1; y <= SEA_LEVEL; y++) c.set(lx, y, lz, WATER)
         }
       }
     }
