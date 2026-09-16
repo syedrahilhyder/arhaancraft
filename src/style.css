@@ -181,6 +181,13 @@ html, body {
   gap: 14px;
   pointer-events: auto;
   z-index: 8;
+  align-items: flex-end;
+}
+/* Mine button stacked directly above the lever (use) button. */
+#mine-lever {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 .action-btn {
   width: 76px;
