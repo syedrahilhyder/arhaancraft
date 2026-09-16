@@ -207,6 +207,13 @@ html, body {
   box-shadow: 0 0 0 3px #fff;
 }
 
+/* Extra jump button, placed above the inventory button. */
+#btn-jump-up {
+  position: absolute;
+  right: 0;
+  bottom: 90px;
+}
+
 /* Inventory panel items */
 .inv-item {
   width: 56px;
