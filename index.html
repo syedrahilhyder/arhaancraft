@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Arhaancraft" />
+    <link rel="apple-touch-icon" href="/icon-192.png" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <title>Arhaancraft</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <div id="hud">
+      <div id="inventory"></div>
+      <div id="hotbar"></div>
+      <div id="crosshair"></div>
+    </div>
+    <div id="controls">
+      <div id="look-area"></div>
+      <div id="joystick-zone">
+        <div id="joystick">
+          <div id="joystick-knob"></div>
+        </div>
+      </div>
+      <div id="action-buttons">
+        <button id="btn-jump" class="action-btn jump">⬆</button>
+        <button id="btn-break" class="action-btn dig">⛏</button>
+        <button id="btn-place" class="action-btn place">🧱</button>
+      </div>
+    </div>
+    <div id="hint">Welcome to Arhaancraft!</div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

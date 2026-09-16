@@ -1,0 +1,224 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  user-select: none;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #000;
+  font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+  touch-action: none;
+}
+
+#app, canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* HUD */
+#hud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+}
+
+#crosshair {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 22px;
+  height: 22px;
+  pointer-events: none;
+}
+#crosshair::before,
+#crosshair::after {
+  content: "";
+  position: absolute;
+  background: rgba(255, 255, 255, 0.85);
+  mix-blend-mode: difference;
+}
+#crosshair::before {
+  left: 50%;
+  top: 0;
+  width: 2px;
+  height: 100%;
+  transform: translateX(-50%);
+}
+#crosshair::after {
+  top: 50%;
+  left: 0;
+  height: 2px;
+  width: 100%;
+  transform: translateY(-50%);
+}
+
+/* Hotbar */
+#hotbar {
+  position: absolute;
+  bottom: max(16px, env(safe-area-inset-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 6px;
+  padding: 6px;
+  background: rgba(0, 0, 0, 0.45);
+  border-radius: 10px;
+  backdrop-filter: blur(4px);
+  pointer-events: auto;
+  border: 2px solid rgba(255, 255, 255, 0.15);
+}
+
+.slot {
+  width: 56px;
+  height: 56px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  cursor: pointer;
+}
+.slot.selected {
+  border-color: #fff;
+  box-shadow: 0 0 0 2px #7cb342, 0 0 12px rgba(124, 179, 66, 0.6);
+  transform: scale(1.08);
+}
+.slot .icon {
+  width: 42px;
+  height: 42px;
+  image-rendering: pixelated;
+}
+.slot .count {
+  position: absolute;
+  bottom: 2px;
+  right: 4px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 0 1px 2px #000;
+}
+
+#inventory {
+  position: absolute;
+  bottom: max(88px, calc(env(safe-area-inset-bottom) + 72px));
+  left: 50%;
+  transform: translateX(-50%);
+  display: none;
+  grid-template-columns: repeat(9, 56px);
+  gap: 6px;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.6);
+  border-radius: 14px;
+  backdrop-filter: blur(6px);
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  pointer-events: auto;
+  z-index: 20;
+}
+#inventory.open { display: grid; }
+
+/* Controls */
+#controls {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  pointer-events: none;
+}
+
+#look-area {
+  position: absolute;
+  inset: 0;
+  pointer-events: auto;
+  z-index: 6;
+}
+
+#joystick-zone {
+  position: absolute;
+  left: 20px;
+  bottom: max(20px, env(safe-area-inset-bottom));
+  width: 150px;
+  height: 150px;
+  pointer-events: auto;
+  z-index: 8;
+}
+#joystick {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255,255,255,0.18), rgba(255,255,255,0.06));
+  border: 2px solid rgba(255,255,255,0.35);
+}
+#joystick-knob {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(255, 255, 255, 0.5);
+  border: 2px solid rgba(255,255,255,0.7);
+}
+
+#action-buttons {
+  position: absolute;
+  right: 20px;
+  bottom: max(20px, env(safe-area-inset-bottom));
+  display: flex;
+  gap: 14px;
+  pointer-events: auto;
+  z-index: 8;
+}
+.action-btn {
+  width: 76px;
+  height: 76px;
+  border-radius: 50%;
+  border: 3px solid rgba(255, 255, 255, 0.4);
+  background: rgba(0, 0, 0, 0.4);
+  color: #fff;
+  font-size: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(4px);
+  cursor: pointer;
+  transition: transform 0.08s;
+}
+.action-btn:active {
+  transform: scale(0.92);
+}
+.action-btn.dig { background: rgba(150, 80, 40, 0.55); }
+.action-btn.place { background: rgba(60, 120, 60, 0.55); }
+.action-btn.active {
+  box-shadow: 0 0 0 3px #fff;
+}
+
+#hint {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: #fff;
+  background: rgba(0, 0, 0, 0.5);
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 14px;
+  z-index: 20;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.5s;
+  text-align: center;
+}
+#hint.show { opacity: 1; }

@@ -1,0 +1,19 @@
+{
+  "name": "arhaancraft",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Arhaancraft - a Minecraft-like voxel game PWA for iPad",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "three": "^0.160.0"
+  },
+  "devDependencies": {
+    "vite": "^5.0.0",
+    "vite-plugin-pwa": "^0.17.0"
+  }
+}
