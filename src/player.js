@@ -2,13 +2,15 @@
 // Movement is driven by a joystick (x,z) and look by touch drag.
 
 import * as THREE from 'three'
-import { World, SEA_LEVEL } from './world.js'
+import { World, SEA_LEVEL, WORLD_HEIGHT } from './world.js'
 import { BLOCKS, AIR, WATER } from './blocks.js'
 import { footstepMaterial } from './sound.js'
 
 const GRAVITY = 24
 const JUMP_VELOCITY = 8.5
 const WALK_SPEED = 5.0
+const FLY_SPEED = 9.0
+const FLY_VERTICAL_SPEED = 7.0
 const EYE_HEIGHT = 1.62
 const PLAYER_WIDTH = 0.6
 const PLAYER_HEIGHT = 1.8
@@ -26,6 +28,8 @@ export class Player {
     this.yaw = 0
     this.pitch = 0
     this.wasJumping = false
+    // Whether the player is in fly mode (free vertical movement, no gravity).
+    this.flying = false
     // Distance accumulated since the last footstep, so steps sound at a steady
     // rate as the player walks regardless of frame timing.
     this.stepAccum = 0
@@ -83,7 +87,7 @@ export class Player {
     this.pitch -= input.lookY
     this.pitch = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, this.pitch))
 
-    // Move direction relative to yaw
+    // Move direction relative to yaw (horizontal plane).
     const forward = new THREE.Vector3(-Math.sin(this.yaw), 0, -Math.cos(this.yaw))
     const right = new THREE.Vector3(Math.cos(this.yaw), 0, -Math.sin(this.yaw))
     const move = new THREE.Vector3()
@@ -94,7 +98,20 @@ export class Player {
     const prevX = this.position.x
     const prevZ = this.position.z
 
-    // Horizontal velocity
+    if (this.flying) {
+      this.updateFlying(dt, input, move)
+    } else {
+      this.updateWalking(dt, input, move)
+      this.updateFootsteps(prevX, prevZ)
+    }
+
+    // Update camera
+    this.camera.position.set(this.position.x, this.position.y + EYE_HEIGHT, this.position.z)
+    this.camera.rotation.set(this.pitch, this.yaw, 0, 'YXZ')
+  }
+
+  // Walking physics: gravity, jumping on ground, horizontal velocity.
+  updateWalking(dt, input, move) {
     const targetSpeed = WALK_SPEED
     this.velocity.x = move.x * targetSpeed
     this.velocity.z = move.z * targetSpeed
@@ -113,9 +130,40 @@ export class Player {
     this.moveAxis(dt, 'x')
     this.moveAxis(dt, 'z')
     this.moveAxis(dt, 'y')
+  }
 
-    // Walk sound: accumulate horizontal distance and fire a footstep on the
-    // ground material beneath the player every STEP_DISTANCE travelled.
+  // Fly physics: no gravity, free vertical movement. The joystick drives
+  // horizontal movement and the jump/descend buttons drive altitude.
+  updateFlying(dt, input, move) {
+    const targetSpeed = FLY_SPEED
+    this.velocity.x = move.x * targetSpeed
+    this.velocity.z = move.z * targetSpeed
+
+    // Vertical: hold jump to ascend, descend button to go down.
+    if (input.jump) {
+      this.velocity.y = FLY_VERTICAL_SPEED
+    } else if (input.descend) {
+      this.velocity.y = -FLY_VERTICAL_SPEED
+    } else {
+      this.velocity.y = 0
+    }
+
+    // Integrate with collision resolution (axis by axis).
+    this.moveAxis(dt, 'x')
+    this.moveAxis(dt, 'z')
+    this.moveAxis(dt, 'y')
+
+    // Keep the player within the built world so they don't fly into the void
+    // above the top chunk.
+    const maxY = WORLD_HEIGHT - PLAYER_HEIGHT - 1
+    if (this.position.y > maxY) {
+      this.position.y = maxY
+      this.velocity.y = 0
+    }
+  }
+
+  // Footstep and landing sounds while walking on the ground.
+  updateFootsteps(prevX, prevZ) {
     if (this.onGround) {
       const dist = Math.hypot(this.position.x - prevX, this.position.z - prevZ)
       if (dist > 0) {
@@ -136,10 +184,6 @@ export class Player {
     } else {
       this.wasJumping = true
     }
-
-    // Update camera
-    this.camera.position.set(this.position.x, this.position.y + EYE_HEIGHT, this.position.z)
-    this.camera.rotation.set(this.pitch, this.yaw, 0, 'YXZ')
   }
 
   // The block material the player is standing on (for footstep variation).

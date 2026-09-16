@@ -224,6 +224,20 @@ export class Game {
     jumpBtn.addEventListener('mousedown', () => this.input.setJump(true))
     jumpBtn.addEventListener('mouseup', () => this.input.setJump(false))
 
+    // Descend button (used in fly mode to fly downward)
+    const descendBtn = document.getElementById('btn-descend')
+    descendBtn.addEventListener('touchstart', (e) => { e.preventDefault(); this.input.setDescend(true) }, { passive: false })
+    descendBtn.addEventListener('touchend', (e) => { e.preventDefault(); this.input.setDescend(false) }, { passive: false })
+    descendBtn.addEventListener('mousedown', () => this.input.setDescend(true))
+    descendBtn.addEventListener('mouseup', () => this.input.setDescend(false))
+
+    // Fly mode toggle
+    const flyBtn = document.getElementById('btn-fly')
+    const toggleFly = () => this.toggleFly()
+    flyBtn.addEventListener('touchstart', (e) => { e.preventDefault(); toggleFly() }, { passive: false })
+    flyBtn.addEventListener('click', () => toggleFly())
+    this.flyBtn = flyBtn
+
     // Break / place buttons
     const breakBtn = document.getElementById('btn-break')
     const placeBtn = document.getElementById('btn-place')
@@ -244,6 +258,20 @@ export class Game {
     invBtn.addEventListener('touchstart', (e) => { e.preventDefault(); this.toggleInventory() }, { passive: false })
     invBtn.addEventListener('click', () => this.toggleInventory())
     this.invBtn = invBtn
+  }
+
+  // Toggle fly mode on/off and update the button's visual state.
+  toggleFly() {
+    const p = this.player
+    p.flying = !p.flying
+    this.flyBtn.classList.toggle('on', p.flying)
+    if (p.flying) {
+      // Stop any downward momentum so the player hovers immediately.
+      p.velocity.y = 0
+      this.showHint('Fly mode on! Joystick to move, ⬆ to rise, ⬇ to descend.')
+    } else {
+      this.showHint('Fly mode off.')
+    }
   }
 
   buildInventoryPanel() {

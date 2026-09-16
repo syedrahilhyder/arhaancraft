@@ -223,13 +223,26 @@ html, body {
 .action-btn.place { background: rgba(60, 120, 60, 0.55); }
 .action-btn.use { background: rgba(200, 140, 40, 0.55); }
 .action-btn.inv { background: rgba(70, 90, 140, 0.55); }
-/* Jump button sits directly above the inventory button. */
+/* Jump button sits directly above the inventory button, descend below it. */
 #btn-jump {
   position: absolute;
   right: 0;
   bottom: 90px;
 }
+#btn-descend {
+  position: absolute;
+  right: 0;
+  bottom: 178px;
+}
+#btn-fly {
+  background: rgba(40, 120, 160, 0.55);
+  font-size: 30px;
+}
 .action-btn.active {
+  box-shadow: 0 0 0 3px #fff;
+}
+#btn-fly.on {
+  background: rgba(30, 170, 90, 0.75);
   box-shadow: 0 0 0 3px #fff;
 }
 

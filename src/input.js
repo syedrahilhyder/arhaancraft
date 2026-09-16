@@ -11,6 +11,7 @@ export class InputController {
       moveX: 0, moveZ: 0,    // joystick
       lookX: 0, lookY: 0,    // look drag deltas (applied to yaw/pitch)
       jump: false,
+      descend: false,        // fly mode: hold to fly down
     }
     this.joystickActive = false
     this.lookActive = false
@@ -95,4 +96,5 @@ export class InputController {
   }
 
   setJump(v) { this.input.jump = v }
+  setDescend(v) { this.input.descend = v }
 }
