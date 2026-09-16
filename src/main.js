@@ -166,13 +166,6 @@ export class Game {
     jumpBtn.addEventListener('mousedown', () => this.input.setJump(true))
     jumpBtn.addEventListener('mouseup', () => this.input.setJump(false))
 
-    // Extra jump button, above the inventory button
-    const jumpUpBtn = document.getElementById('btn-jump-up')
-    jumpUpBtn.addEventListener('touchstart', (e) => { e.preventDefault(); this.input.setJump(true) }, { passive: false })
-    jumpUpBtn.addEventListener('touchend', (e) => { e.preventDefault(); this.input.setJump(false) }, { passive: false })
-    jumpUpBtn.addEventListener('mousedown', () => this.input.setJump(true))
-    jumpUpBtn.addEventListener('mouseup', () => this.input.setJump(false))
-
     // Break / place buttons
     const breakBtn = document.getElementById('btn-break')
     const placeBtn = document.getElementById('btn-place')
