@@ -25,6 +25,11 @@ export class Game {
     this.atlasTexture.magFilter = THREE.NearestFilter
     this.atlasTexture.minFilter = THREE.NearestFilter
     this.atlasTexture.generateMipmaps = false
+    // The mesh UVs are computed in canvas space (v=0 at the top), so disable
+    // three.js's default vertical flip; otherwise faces sample undrawn (black) atlas rows.
+    this.atlasTexture.flipY = false
+    // The atlas canvas is sRGB; mark it so the renderer decodes block colours correctly.
+    this.atlasTexture.colorSpace = THREE.SRGBColorSpace
 
     this.material = new THREE.MeshLambertMaterial({ map: this.atlasTexture, vertexColors: false })
 
