@@ -2,7 +2,8 @@
 // Stores block ids in Uint8Arrays and provides coordinate helpers.
 
 import { AIR, GRASS, DIRT, STONE, SAND, WOOD, LEAVES, WATER, BEDROCK,
-         PLANKS, COBBLESTONE, BRICK, GLASS, TABLE, CHAIR, TOILET, SINK } from './blocks.js'
+         PLANKS, COBBLESTONE, BRICK, GLASS, TABLE, CHAIR, TOILET, SINK,
+         STRAWBERRY } from './blocks.js'
 
 export const CHUNK_SIZE = 16
 export const WORLD_HEIGHT = 64
@@ -149,6 +150,19 @@ export class World {
                 for (let dz = -rad; dz <= rad; dz++) {
                   if (dx === 0 && dz === 0 && dy <= treeH) continue
                   if (c.get(lx + dx, h + dy, lz + dz) === AIR) c.set(lx + dx, h + dy, lz + dz, LEAVES)
+                }
+              }
+            }
+            // Hang a few strawberries from the leaves.
+            for (let dy = treeH - 1; dy <= treeH; dy++) {
+              const rad = dy < treeH ? 1 : 0
+              for (let dx = -rad; dx <= rad; dx++) {
+                for (let dz = -rad; dz <= rad; dz++) {
+                  if (dx === 0 && dz === 0 && dy <= treeH) continue
+                  const sx = lx + dx, sy = h + dy, sz = lz + dz
+                  if (c.get(sx, sy, sz) === LEAVES && this.hash(sx * 31, sz * 17 + sy) < 0.15) {
+                    c.set(sx, sy, sz, STRAWBERRY)
+                  }
                 }
               }
             }

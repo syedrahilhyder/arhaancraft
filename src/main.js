@@ -7,12 +7,13 @@ import { buildAtlas } from './texture.js'
 import { buildChunkGeometry } from './mesher.js'
 import { buildFurnitureGroup, isFurniture } from './furniture.js'
 import { buildMechanicalBlock } from './mechanical.js'
+import { buildBerry, isBerry } from './berry.js'
 import { Player } from './player.js'
 import { Sheep } from './sheep.js'
 import { InputController } from './input.js'
 import { BLOCKS, PLACEABLE, AIR, WATER, GRASS, DIRT, STONE, SAND, WOOD, LEAVES,
          GLASS, PLANKS, COBBLESTONE, BRICK, TABLE, CHAIR, TOILET, SINK,
-         WIRE, MOTOR, PISTON, SWITCH, isMechanical, ITEM_ICONS, blockName } from './blocks.js'
+         WIRE, MOTOR, PISTON, SWITCH, STRAWBERRY, isMechanical, ITEM_ICONS, blockName } from './blocks.js'
 
 const RENDER_DISTANCE = 3 // chunks in each direction
 const VIEW_RANGE = RENDER_DISTANCE * CHUNK_SIZE
@@ -46,6 +47,7 @@ export class Game {
     this.dirtyChunks = new Set()
     this.mechBlocks = new Map() // "x,y,z" -> { id, group, setPowered, update }
     this.switchOn = new Map()   // "x,y,z" -> bool (switch on/off state)
+    this.berryMeshes = new Map() // "x,y,z" -> Group
 
     // Inventory
     this.hotbar = []
@@ -348,6 +350,15 @@ export class Game {
         this.mechBlocks.delete(mkey)
       }
     }
+    // Remove any berry meshes in this chunk.
+    for (const [bkey, g] of [...this.berryMeshes]) {
+      const [bx, , bz] = bkey.split(',').map(Number)
+      if (Math.floor(bx / CHUNK_SIZE) === cx && Math.floor(bz / CHUNK_SIZE) === cz) {
+        this.scene.remove(g)
+        this.disposeFurniture(g)
+        this.berryMeshes.delete(bkey)
+      }
+    }
 
     // Build merged block mesh
     let hasBlocks = false
@@ -373,6 +384,28 @@ export class Game {
 
     // Build mechanical blocks for this chunk.
     this.buildMechForChunk(chunk, cx, cz)
+
+    // Build berry meshes for this chunk.
+    this.buildBerryForChunk(chunk, cx, cz)
+  }
+
+  buildBerryForChunk(chunk, cx, cz) {
+    for (let x = 0; x < CHUNK_SIZE; x++) {
+      for (let z = 0; z < CHUNK_SIZE; z++) {
+        for (let y = 0; y < WORLD_HEIGHT; y++) {
+          const id = chunk.get(x, y, z)
+          if (isBerry(id)) {
+            const wx = cx * CHUNK_SIZE + x
+            const wz = cz * CHUNK_SIZE + z
+            const bkey = `${wx},${y},${wz}`
+            const g = buildBerry()
+            g.position.set(wx, y, wz)
+            this.scene.add(g)
+            this.berryMeshes.set(bkey, g)
+          }
+        }
+      }
+    }
   }
 
   buildMechForChunk(chunk, cx, cz) {
@@ -563,9 +596,19 @@ export class Game {
 
   activateTarget() {
     const target = this.getTargetBlock()
-    if (target && target.id === SWITCH) {
+    if (!target) return
+    if (target.id === SWITCH) {
       this.toggleSwitch(target.x, target.y, target.z)
+    } else if (target.id === STRAWBERRY) {
+      this.pickStrawberry(target.x, target.y, target.z)
     }
+  }
+
+  pickStrawberry(x, y, z) {
+    this.world.setBlock(x, y, z, AIR)
+    this.blockCounts[STRAWBERRY] = (this.blockCounts[STRAWBERRY] || 0) + 1
+    this.refreshInventory()
+    this.markDirty(x, z)
   }
 
   setupInteraction() {

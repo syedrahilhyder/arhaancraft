@@ -5,6 +5,7 @@ import * as THREE from 'three'
 import { CHUNK_SIZE, WORLD_HEIGHT } from './world.js'
 import { BLOCKS, AIR, WATER, LEAVES, GLASS, isMechanical } from './blocks.js'
 import { isFurniture } from './furniture.js'
+import { isBerry } from './berry.js'
 
 class EarthMat {
   constructor(map) {
@@ -41,6 +42,7 @@ export function buildChunkGeometry(chunk, world, atlasSlots) {
         // not the merged chunk mesh.
         if (isFurniture(id)) continue
         if (isMechanical(id)) continue
+        if (isBerry(id)) continue
         const block = BLOCKS[id]
         if (!block) continue
 

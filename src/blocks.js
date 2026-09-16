@@ -22,6 +22,7 @@ export const WIRE = 17
 export const MOTOR = 18
 export const PISTON = 19
 export const SWITCH = 20
+export const STRAWBERRY = 21
 
 // Each block: name, whether it's solid, whether it can be walked through
 // For furniture blocks we render custom geometry.
@@ -47,13 +48,14 @@ export const BLOCKS = {
   [MOTOR]:     { id: MOTOR,     name: 'Motor',      solid: true,  transparent: false, color: '#ef6c00' },
   [PISTON]:    { id: PISTON,    name: 'Piston',     solid: true,  transparent: false, color: '#b0b7bd' },
   [SWITCH]:    { id: SWITCH,    name: 'Switch',     solid: true,  transparent: false, color: '#ffb300' },
+  [STRAWBERRY]: { id: STRAWBERRY, name: 'Strawberry',  solid: false, transparent: false, color: '#d32f2f' },
 }
 
 // Which blocks are placeable / obtainable as items
 export const PLACEABLE = [
   GRASS, DIRT, STONE, SAND, WOOD, LEAVES, GLASS, PLANKS, COBBLESTONE, BRICK,
   TABLE, CHAIR, TOILET, SINK,
-  WIRE, MOTOR, PISTON, SWITCH,
+  WIRE, MOTOR, PISTON, SWITCH, STRAWBERRY,
 ]
 
 // Textures are generated per-block-face in texture.js.
@@ -77,6 +79,7 @@ export const ITEM_ICONS = {
   [MOTOR]: '⚙️',
   [PISTON]: '🔩',
   [SWITCH]: '🔌',
+  [STRAWBERRY]: '🍓',
 }
 
 // Display name for HUD / labels
