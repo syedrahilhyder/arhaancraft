@@ -4,6 +4,7 @@
 import * as THREE from 'three'
 import { World, SEA_LEVEL } from './world.js'
 import { BLOCKS, AIR, WATER } from './blocks.js'
+import { footstepMaterial } from './sound.js'
 
 const GRAVITY = 24
 const JUMP_VELOCITY = 8.5
@@ -11,16 +12,23 @@ const WALK_SPEED = 5.0
 const EYE_HEIGHT = 1.62
 const PLAYER_WIDTH = 0.6
 const PLAYER_HEIGHT = 1.8
+// Distance travelled before a footstep sound fires; a full stride at walk speed.
+const STEP_DISTANCE = 1.1
 
 export class Player {
-  constructor(world, camera) {
+  constructor(world, camera, sound) {
     this.world = world
     this.camera = camera
+    this.sound = sound
     this.position = new THREE.Vector3(0, 40, 0)
     this.velocity = new THREE.Vector3(0, 0, 0)
     this.onGround = false
     this.yaw = 0
     this.pitch = 0
+    this.wasJumping = false
+    // Distance accumulated since the last footstep, so steps sound at a steady
+    // rate as the player walks regardless of frame timing.
+    this.stepAccum = 0
     // small start area
     this.spawn()
   }
@@ -83,6 +91,9 @@ export class Player {
     move.addScaledVector(right, input.moveX)
     if (move.lengthSq() > 0) move.normalize()
 
+    const prevX = this.position.x
+    const prevZ = this.position.z
+
     // Horizontal velocity
     const targetSpeed = WALK_SPEED
     this.velocity.x = move.x * targetSpeed
@@ -92,6 +103,7 @@ export class Player {
     if (input.jump && this.onGround) {
       this.velocity.y = JUMP_VELOCITY
       this.onGround = false
+      if (this.sound) this.sound.jump()
     }
 
     // Gravity
@@ -102,9 +114,41 @@ export class Player {
     this.moveAxis(dt, 'z')
     this.moveAxis(dt, 'y')
 
+    // Walk sound: accumulate horizontal distance and fire a footstep on the
+    // ground material beneath the player every STEP_DISTANCE travelled.
+    if (this.onGround) {
+      const dist = Math.hypot(this.position.x - prevX, this.position.z - prevZ)
+      if (dist > 0) {
+        this.stepAccum += dist
+        if (this.stepAccum >= STEP_DISTANCE) {
+          this.stepAccum = 0
+          const mat = this.groundMaterial()
+          if (this.sound) this.sound.footstep(mat)
+        }
+      } else {
+        this.stepAccum = 0
+      }
+      // Landing sound: was airborne last frame, now on the ground.
+      if (this.wasJumping) {
+        this.wasJumping = false
+        if (this.sound) this.sound.land()
+      }
+    } else {
+      this.wasJumping = true
+    }
+
     // Update camera
     this.camera.position.set(this.position.x, this.position.y + EYE_HEIGHT, this.position.z)
     this.camera.rotation.set(this.pitch, this.yaw, 0, 'YXZ')
+  }
+
+  // The block material the player is standing on (for footstep variation).
+  groundMaterial() {
+    const x = Math.floor(this.position.x)
+    const z = Math.floor(this.position.z)
+    const y = Math.floor(this.position.y) - 1
+    const id = this.world.getBlock(x, y, z)
+    return footstepMaterial(id)
   }
 
   moveAxis(dt, axis) {

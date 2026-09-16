@@ -11,6 +11,7 @@ import { buildBerry, isBerry } from './berry.js'
 import { Player } from './player.js'
 import { Sheep } from './sheep.js'
 import { InputController } from './input.js'
+import { SoundManager } from './sound.js'
 import { BLOCKS, PLACEABLE, AIR, WATER, GRASS, DIRT, STONE, SAND, WOOD, LEAVES,
          GLASS, PLANKS, COBBLESTONE, BRICK, TABLE, CHAIR, TOILET, SINK,
          WIRE, MOTOR, PISTON, SWITCH, STRAWBERRY, isMechanical, ITEM_ICONS, blockName } from './blocks.js'
@@ -41,8 +42,16 @@ export class Game {
 
     this.material = new THREE.MeshLambertMaterial({ map: this.atlasTexture, vertexColors: false })
 
+    // Sound effects (synthesised, no asset files needed).
+    this.sound = new SoundManager()
+    // Browsers only allow audio after a user gesture, so prime the context on
+    // the first touch/click anywhere on the screen.
+    const primeAudio = () => this.sound.ensure()
+    window.addEventListener('pointerdown', primeAudio, { once: true })
+    window.addEventListener('touchstart', primeAudio, { once: true })
+
     // Player spawn
-    this.player = new Player(this.world, this.camera)
+    this.player = new Player(this.world, this.camera, this.sound)
     if (save) {
       this.player.position.set(save.player.x, save.player.y, save.player.z)
       this.player.yaw = save.player.yaw
@@ -694,6 +703,9 @@ export class Game {
   doBreak() {
     const target = this.getTargetBlock()
     if (!target) return
+    // Break sound for the block's material, offset by its direction from the
+    // player so the audio feels spatial.
+    this.sound.breakBlock(target.id, this.targetPan(target))
     this.world.setBlock(target.x, target.y, target.z, AIR)
     this.editedCells.add(`${target.x},${target.y},${target.z}`)
     // Water flows into the gap if there is a source nearby.
@@ -711,6 +723,23 @@ export class Game {
     setTimeout(() => this.breakBtn.classList.remove('active'), 120)
   }
 
+  // Stereo pan (-1..1) for a block's position relative to the player's view.
+  targetPan(target) {
+    if (!target) return 0
+    const dx = target.x - this.player.position.x
+    const dz = target.z - this.player.position.z
+    // Right is +sin(yaw) for x... project world offset onto the right vector.
+    const rightX = Math.cos(this.player.yaw)
+    const rightZ = -Math.sin(this.player.yaw)
+    const lateral = dx * rightX + dz * rightZ
+    const forwardX = -Math.sin(this.player.yaw)
+    const forwardZ = -Math.cos(this.player.yaw)
+    const depth = dx * forwardX + dz * forwardZ
+    // Scale by distance so far-away blocks are quieter.
+    if (depth === 0) return 0
+    return lateral / (Math.abs(depth) + 4)
+  }
+
   doPlace() {
     const target = this.getTargetBlock()
     if (!target) return
@@ -726,6 +755,8 @@ export class Game {
     // don't place inside the player
     if (this.isPlayerOverlap(px, py, pz)) return
     if (this.world.getBlock(px, py, pz) !== AIR && this.world.getBlock(px, py, pz) !== WATER) return
+    // Place sound, positioned toward the new block.
+    this.sound.placeBlock(this.targetPan(target))
     // water gets replaced
     this.world.setBlock(px, py, pz, id)
     this.editedCells.add(`${px},${py},${pz}`)
@@ -784,6 +815,7 @@ export class Game {
   toggleSwitch(x, y, z) {
     const key = `${x},${y},${z}`
     this.switchOn.set(key, !this.switchOn.get(key))
+    this.sound.click()
     this.recomputePower()
   }
 
@@ -798,6 +830,7 @@ export class Game {
   }
 
   pickStrawberry(x, y, z) {
+    this.sound.pop()
     this.world.setBlock(x, y, z, AIR)
     this.editedCells.add(`${x},${y},${z}`)
     this.flowWater(x, y, z)
