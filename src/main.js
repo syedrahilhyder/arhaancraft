@@ -44,6 +44,8 @@ export class Game {
 
     // Sound effects (synthesised, no asset files needed).
     this.sound = new SoundManager()
+    // The full-screen water tint shown when the player is submerged.
+    this.waterOverlay = document.getElementById('water-overlay')
     // Browsers only allow audio after a user gesture, so prime the context on
     // the first touch/click anywhere on the screen.
     const primeAudio = () => this.sound.ensure()
@@ -124,6 +126,14 @@ export class Game {
     this.scene = new THREE.Scene()
     this.scene.background = new THREE.Color(0x87ceeb)
     this.scene.fog = new THREE.Fog(0x87ceeb, VIEW_RANGE, VIEW_RANGE * 2)
+    // Remember the above-water fog/background so we can restore them after the
+    // player surfaces, then swap in a murky underwater look while submerged.
+    this.skyColor = new THREE.Color(0x87ceeb)
+    this.skyFogNear = VIEW_RANGE
+    this.skyFogFar = VIEW_RANGE * 2
+    this.underwaterColor = new THREE.Color(0x2d6faa)
+    this.underwaterFogNear = 2
+    this.underwaterFogFar = 30
 
     this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 300)
     this.camera.rotation.order = 'YXZ'
@@ -866,6 +876,32 @@ export class Game {
     }
   }
 
+  // Whether the player's eyes are inside a water block.
+  isPlayerUnderwater() {
+    const x = Math.floor(this.player.position.x)
+    const y = Math.floor(this.player.position.y + 1.62)
+    const z = Math.floor(this.player.position.z)
+    return this.world.getBlock(x, y, z) === WATER
+  }
+
+  // Fade a blue overlay and murky fog while submerged, restoring the clear sky
+  // view once the player surfaces.
+  updateWaterEffect() {
+    const underwater = this.isPlayerUnderwater()
+    this.waterOverlay.classList.toggle('active', underwater)
+    if (underwater) {
+      this.scene.fog.color.copy(this.underwaterColor)
+      this.scene.fog.near = this.underwaterFogNear
+      this.scene.fog.far = this.underwaterFogFar
+      this.scene.background.copy(this.underwaterColor)
+    } else {
+      this.scene.fog.color.copy(this.skyColor)
+      this.scene.fog.near = this.skyFogNear
+      this.scene.fog.far = this.skyFogFar
+      this.scene.background.copy(this.skyColor)
+    }
+  }
+
   bindEvents() {
     window.addEventListener('resize', () => {
       this.camera.aspect = window.innerWidth / window.innerHeight
@@ -917,6 +953,9 @@ export class Game {
 
     // Highlight the block being aimed at.
     this.updateTargetHighlight()
+
+    // Fade in a blue overlay and murky fog while the player is submerged.
+    this.updateWaterEffect()
 
     this.renderer.render(this.scene, this.camera)
   }

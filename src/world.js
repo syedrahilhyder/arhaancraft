@@ -71,12 +71,26 @@ export class World {
     c.set(lx, wy, lz, id)
   }
 
+  // How "flat" the terrain is here (0 = hilly, 1 = flat plains). A low-frequency
+  // noise carves large open regions of gently varying, tree-less grassland.
+  flatness(wx, wz) {
+    const n = this.noise2((wx + this.seed) * 0.012 + 500, wz * 0.012 + 500)
+    // Threshold so only some regions become plains, with a smooth edge.
+    return Math.max(0, Math.min(1, (n + 0.5) * 2.4 - 0.7))
+  }
+
   // Deterministic height noise (2D value noise)
   heightAt(wx, wz) {
     const n = this.noise2((wx + this.seed) * 0.06, wz * 0.06)
     const n2 = this.noise2((wx + this.seed) * 0.02 + 100, wz * 0.02 + 100)
     const base = 24
-    return Math.floor(base + n * 10 + n2 * 6)
+    const hilly = base + n * 10 + n2 * 6
+    // In flat regions, pull the height toward a gentle baseline (just above
+    // sea level) so there is plenty of room for open, walkable grassland.
+    const flat = this.flatness(wx, wz)
+    const flatBase = 25
+    const flatHeight = flatBase + n2 * 2
+    return Math.floor(hilly * (1 - flat) + flatHeight * flat)
   }
 
   // Simple smooth value noise
@@ -137,7 +151,10 @@ export class World {
       for (let lz = 2; lz < CHUNK_SIZE - 2; lz++) {
         const wx = x0 + lx, wz = z0 + lz
         const r = this.hash(wx * 7, wz * 13)
-        if (r < 0.03) {
+        // Open plains hold very few trees; hilly areas keep the normal density.
+        const flat = this.flatness(wx, wz)
+        const treeChance = 0.03 * (1 - flat) + 0.001 * flat
+        if (r < treeChance) {
           const h = this.heightAt(wx, wz)
           if (c.get(lx, h, lz) === GRASS) {
             const treeH = 4 + Math.floor(r * 100) % 2

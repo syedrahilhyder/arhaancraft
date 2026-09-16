@@ -24,6 +24,18 @@ html, body {
   display: block;
 }
 
+/* Blue tint that fades in over the view when the player is submerged in water. */
+#water-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 15;
+  background: rgba(40, 110, 190, 0.45);
+  opacity: 0;
+  transition: opacity 0.4s;
+}
+#water-overlay.active { opacity: 1; }
+
 /* HUD */
 #hud {
   position: absolute;
