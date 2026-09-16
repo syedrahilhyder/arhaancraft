@@ -93,12 +93,16 @@ export class Game {
   }
 
   initInventory() {
-    // Start with a set of blocks in the hotbar
+    // Quick-access bar, plus a full per-block inventory.
     this.hotbar = [
       GRASS, DIRT, STONE, WOOD, PLANKS, GLASS, TABLE, CHAIR, TOILET, SINK,
     ]
-    // counts for each (infinite for simplicity but give a number)
-    this.counts = new Array(this.hotbar.length).fill(64)
+    // Per-block counts for every placeable block (what you collect and spend).
+    this.blockCounts = {}
+    for (const id of PLACEABLE) this.blockCounts[id] = 64
+    // Currently selected block to build with.
+    this.activeBlock = this.hotbar[0]
+    this.selectedSlot = 0
   }
 
   setupUI() {
@@ -106,7 +110,7 @@ export class Game {
     hotbar.innerHTML = ''
     this.hotbar.forEach((id, idx) => {
       const slot = document.createElement('div')
-      slot.className = 'slot' + (idx === this.selectedSlot ? ' selected' : '')
+      slot.className = 'slot'
       slot.dataset.index = idx
       // icon
       const icon = document.createElement('div')
@@ -116,13 +120,16 @@ export class Game {
       // count
       const count = document.createElement('div')
       count.className = 'count'
-      count.textContent = this.counts[idx]
+      count.textContent = this.blockCounts[id]
       slot.appendChild(count)
-      // label under? skip
+      // Tap/click selects this block as the active one.
       slot.addEventListener('click', () => this.selectSlot(idx))
+      slot.addEventListener('touchstart', (e) => { e.preventDefault(); this.selectSlot(idx) }, { passive: false })
       hotbar.appendChild(slot)
     })
     this.hotbarEl = hotbar
+
+    this.buildInventoryPanel()
 
     // Jump button
     const jumpBtn = document.getElementById('btn-jump')
@@ -141,6 +148,68 @@ export class Game {
     placeBtn.addEventListener('mousedown', () => this.doPlace())
     this.breakBtn = breakBtn
     this.placeBtn = placeBtn
+
+    // Inventory toggle button
+    const invBtn = document.getElementById('btn-inventory')
+    invBtn.addEventListener('touchstart', (e) => { e.preventDefault(); this.toggleInventory() }, { passive: false })
+    invBtn.addEventListener('click', () => this.toggleInventory())
+    this.invBtn = invBtn
+  }
+
+  buildInventoryPanel() {
+    const panel = document.getElementById('inventory')
+    panel.innerHTML = ''
+    const title = document.createElement('div')
+    title.id = 'inventory-title'
+    title.textContent = 'Inventory'
+    panel.appendChild(title)
+    const close = document.createElement('div')
+    close.id = 'inventory-close'
+    close.textContent = '×'
+    close.addEventListener('click', () => this.toggleInventory(false))
+    close.addEventListener('touchstart', (e) => { e.preventDefault(); this.toggleInventory(false) }, { passive: false })
+    panel.appendChild(close)
+    this.invItemEls = []
+    for (const id of PLACEABLE) {
+      const item = document.createElement('div')
+      item.className = 'inv-item'
+      const icon = document.createElement('div')
+      icon.className = 'icon'
+      this.applyIcon(icon, id)
+      item.appendChild(icon)
+      const count = document.createElement('div')
+      count.className = 'count'
+      item.appendChild(count)
+      item.addEventListener('click', () => this.selectBlock(id))
+      item.addEventListener('touchstart', (e) => { e.preventDefault(); this.selectBlock(id) }, { passive: false })
+      panel.appendChild(item)
+      this.invItemEls.push({ id, el: item, count })
+    }
+    this.inventoryEl = panel
+    this.refreshInventory()
+  }
+
+  toggleInventory(force) {
+    const open = force !== undefined ? force : !this.inventoryEl.classList.contains('open')
+    this.inventoryEl.classList.toggle('open', open)
+  }
+
+  selectBlock(id) {
+    this.activeBlock = id
+    this.refreshInventory()
+  }
+
+  refreshInventory() {
+    for (const { id, el, count } of this.invItemEls) {
+      count.textContent = this.blockCounts[id]
+      el.classList.toggle('selected', id === this.activeBlock)
+    }
+    const slots = this.hotbarEl.querySelectorAll('.slot')
+    slots.forEach((s, i) => {
+      s.classList.toggle('selected', this.hotbar[i] === this.activeBlock)
+      const c = s.querySelector('.count')
+      if (c) c.textContent = this.blockCounts[this.hotbar[i]]
+    })
   }
 
   applyIcon(el, id) {
@@ -175,8 +244,8 @@ export class Game {
 
   selectSlot(idx) {
     this.selectedSlot = idx
-    const slots = this.hotbarEl.querySelectorAll('.slot')
-    slots.forEach((s, i) => s.classList.toggle('selected', i === idx))
+    this.activeBlock = this.hotbar[idx]
+    this.refreshInventory()
   }
 
   // --- Chunk management ---
@@ -333,6 +402,11 @@ export class Game {
     const target = this.getTargetBlock()
     if (!target) return
     this.world.setBlock(target.x, target.y, target.z, AIR)
+    // Collect the broken block into the inventory.
+    if (this.blockCounts[target.id] !== undefined) {
+      this.blockCounts[target.id]++
+      this.refreshInventory()
+    }
     this.markDirty(target.x, target.z)
     this.breakBtn.classList.add('active')
     setTimeout(() => this.breakBtn.classList.remove('active'), 120)
@@ -341,8 +415,10 @@ export class Game {
   doPlace() {
     const target = this.getTargetBlock()
     if (!target) return
-    const id = this.hotbar[this.selectedSlot]
+    const id = this.activeBlock
     if (!id) return
+    // Don't place if out of the block item.
+    if (this.blockCounts[id] <= 0) return
     // place adjacent to face
     const n = target.face
     const px = target.x + n[0]
@@ -354,13 +430,9 @@ export class Game {
     // water gets replaced
     this.world.setBlock(px, py, pz, id)
     this.markDirty(px, pz)
-    // decrement count
-    if (this.counts[this.selectedSlot] > 0) {
-      this.counts[this.selectedSlot]--
-      const slot = this.hotbarEl.querySelectorAll('.slot')[this.selectedSlot]
-      const c = slot.querySelector('.count')
-      c.textContent = this.counts[this.selectedSlot]
-    }
+    // spend one from the inventory
+    this.blockCounts[id]--
+    this.refreshInventory()
     this.placeBtn.classList.add('active')
     setTimeout(() => this.placeBtn.classList.remove('active'), 120)
   }

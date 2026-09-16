@@ -29,7 +29,8 @@ html, body {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  z-index: 5;
+  /* Above the full-screen look-area so the hotbar and inventory receive taps. */
+  z-index: 20;
 }
 
 #crosshair {
@@ -201,8 +202,58 @@ html, body {
 }
 .action-btn.dig { background: rgba(150, 80, 40, 0.55); }
 .action-btn.place { background: rgba(60, 120, 60, 0.55); }
+.action-btn.inv { background: rgba(70, 90, 140, 0.55); }
 .action-btn.active {
   box-shadow: 0 0 0 3px #fff;
+}
+
+/* Inventory panel items */
+.inv-item {
+  width: 56px;
+  height: 56px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  cursor: pointer;
+}
+.inv-item.selected {
+  border-color: #fff;
+  box-shadow: 0 0 0 2px #7cb342, 0 0 12px rgba(124, 179, 66, 0.6);
+}
+.inv-item .icon {
+  width: 42px;
+  height: 42px;
+  image-rendering: pixelated;
+}
+.inv-item .count {
+  position: absolute;
+  bottom: 2px;
+  right: 4px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 0 1px 2px #000;
+}
+#inventory-title {
+  grid-column: 1 / -1;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  text-shadow: 0 1px 2px #000;
+}
+#inventory-close {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  color: #fff;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  text-shadow: 0 1px 2px #000;
 }
 
 #hint {
