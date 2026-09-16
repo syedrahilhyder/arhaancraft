@@ -61,6 +61,9 @@ export class Game {
     this.berryMeshes = new Map() // "x,y,z" -> Group
     // Every cell the player has edited (placed/removed/picked), replayed on load.
     this.editedCells = new Set(save ? Object.keys(save.edits || {}) : [])
+    // Gradual water flow: cells whose water still needs to spread, so water
+    // advances visibly instead of instantly filling every gap.
+    this.waterQueue = []
     // Saved block edits grouped per chunk, applied when each chunk is generated.
     this.editsByChunk = new Map()
     if (save) {
@@ -589,49 +592,67 @@ export class Game {
     if (lz === CHUNK_SIZE - 1) this.rebuildChunk(cx, cz + 1)
   }
 
-  // Let water flow into air after a block edit: water falls down and spreads
-  // horizontally into adjacent air cells, bounded so it does not flood forever.
+  // Seed gradual water flow after a block edit: water neighbours of the edited
+  // cell will spread into the gap a few cells per tick, so it fills over time
+  // rather than instantly.
   flowWater(x, y, z) {
-    const DIRS = [[0, -1, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1]]
-    const MAX_FLOW = 200
-    const seen = new Set()
-    const queue = []
-    const touched = new Set()
-    const key = (bx, by, bz) => `${bx},${by},${bz}`
-    const markTouched = (wx, wz) => {
-      touched.add(this.world.key(Math.floor(wx / CHUNK_SIZE), Math.floor(wz / CHUNK_SIZE)))
-    }
-    // Seed with water neighbours of the edited cell; mark the edited chunk too.
-    markTouched(x, z)
-    for (const [dx, dy, dz] of DIRS.concat([[0, 1, 0]])) {
+    const dirs = [[0, -1, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1], [0, 1, 0]]
+    for (const [dx, dy, dz] of dirs) {
       const nx = x + dx, ny = y + dy, nz = z + dz
       if (this.world.getBlock(nx, ny, nz) === WATER) {
-        queue.push([nx, ny, nz])
-        seen.add(key(nx, ny, nz))
+        this.waterQueue.push({ x: nx, y: ny, z: nz, hdist: 0 })
       }
     }
-    let count = 0
-    while (queue.length && count < MAX_FLOW) {
-      const [wx, wy, wz] = queue.shift()
-      for (const [dx, dy, dz] of DIRS) {
-        const nx = wx + dx, ny = wy + dy, nz = wz + dz
-        if (ny < 0 || ny >= WORLD_HEIGHT) continue
-        const k = key(nx, ny, nz)
-        if (seen.has(k)) continue
-        if (this.world.getBlock(nx, ny, nz) !== AIR) continue
-        this.world.setBlock(nx, ny, nz, WATER)
-        this.editedCells.add(`${nx},${ny},${nz}`)
-        seen.add(k)
-        queue.push([nx, ny, nz])
-        markTouched(nx, nz)
-        count++
+  }
+
+  // Advance the gradual water flow a little each frame, governed by a tick timer.
+  stepWater(dt) {
+    if (this.waterQueue.length === 0) return
+    this._waterAccum = (this._waterAccum || 0) + dt
+    const TICK = 0.12 // seconds between each flow step
+    while (this._waterAccum >= TICK) {
+      this._waterAccum -= TICK
+      this._waterTick()
+      if (this.waterQueue.length === 0) break
+    }
+  }
+
+  // One flow step: process a small batch of water cells, letting each fall and
+  // then spread horizontally a limited distance from its source.
+  _waterTick() {
+    const MAX_PER_TICK = 4
+    const MAX_H = 10 // horizontal reach from the source
+    const touched = new Set()
+    let n = 0
+    while (n < MAX_PER_TICK && this.waterQueue.length) {
+      const { x, y, z, hdist } = this.waterQueue.shift()
+      if (this.world.getBlock(x, y, z) !== WATER) continue
+      // Water falls into the cell below, then spreads horizontally to every
+      // adjacent air cell up to the reach limit, so it pools naturally.
+      if (n < MAX_PER_TICK && this._tryFillWater(x, y - 1, z, hdist, touched)) n++
+      if (hdist < MAX_H) {
+        for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          if (n >= MAX_PER_TICK) break
+          if (this._tryFillWater(x + dx, y, z + dz, hdist + 1, touched)) n++
+        }
       }
     }
-    if (count === 0) return
     for (const ck of touched) {
       const [cx, cz] = ck.split(',').map(Number)
       this.rebuildChunk(cx, cz)
     }
+  }
+
+  // Fill one air cell with water (if valid) and queue it to spread further.
+  _tryFillWater(x, y, z, hdist, touched) {
+    if (y < 0 || y >= WORLD_HEIGHT) return false
+    if (this.world.getBlock(x, y, z) !== AIR) return false
+    const k = `${x},${y},${z}`
+    this.world.setBlock(x, y, z, WATER)
+    this.editedCells.add(k)
+    this.waterQueue.push({ x, y, z, hdist })
+    touched.add(this.world.key(Math.floor(x / CHUNK_SIZE), Math.floor(z / CHUNK_SIZE)))
+    return true
   }
 
   // --- Interaction: raycast to find targeted block ---
@@ -845,6 +866,9 @@ export class Game {
     // Regenerate chunks as player moves, a bounded batch per frame
     this.generateAroundPlayer()
     this.processChunkQueue()
+
+    // Advance gradual water flow
+    this.stepWater(dt)
 
     // Animate wandering sheep
     for (const sheep of this.sheep) sheep.update(dt)
