@@ -589,6 +589,51 @@ export class Game {
     if (lz === CHUNK_SIZE - 1) this.rebuildChunk(cx, cz + 1)
   }
 
+  // Let water flow into air after a block edit: water falls down and spreads
+  // horizontally into adjacent air cells, bounded so it does not flood forever.
+  flowWater(x, y, z) {
+    const DIRS = [[0, -1, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1]]
+    const MAX_FLOW = 200
+    const seen = new Set()
+    const queue = []
+    const touched = new Set()
+    const key = (bx, by, bz) => `${bx},${by},${bz}`
+    const markTouched = (wx, wz) => {
+      touched.add(this.world.key(Math.floor(wx / CHUNK_SIZE), Math.floor(wz / CHUNK_SIZE)))
+    }
+    // Seed with water neighbours of the edited cell; mark the edited chunk too.
+    markTouched(x, z)
+    for (const [dx, dy, dz] of DIRS.concat([[0, 1, 0]])) {
+      const nx = x + dx, ny = y + dy, nz = z + dz
+      if (this.world.getBlock(nx, ny, nz) === WATER) {
+        queue.push([nx, ny, nz])
+        seen.add(key(nx, ny, nz))
+      }
+    }
+    let count = 0
+    while (queue.length && count < MAX_FLOW) {
+      const [wx, wy, wz] = queue.shift()
+      for (const [dx, dy, dz] of DIRS) {
+        const nx = wx + dx, ny = wy + dy, nz = wz + dz
+        if (ny < 0 || ny >= WORLD_HEIGHT) continue
+        const k = key(nx, ny, nz)
+        if (seen.has(k)) continue
+        if (this.world.getBlock(nx, ny, nz) !== AIR) continue
+        this.world.setBlock(nx, ny, nz, WATER)
+        this.editedCells.add(`${nx},${ny},${nz}`)
+        seen.add(k)
+        queue.push([nx, ny, nz])
+        markTouched(nx, nz)
+        count++
+      }
+    }
+    if (count === 0) return
+    for (const ck of touched) {
+      const [cx, cz] = ck.split(',').map(Number)
+      this.rebuildChunk(cx, cz)
+    }
+  }
+
   // --- Interaction: raycast to find targeted block ---
   getTargetBlock() {
     this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera)
@@ -630,6 +675,8 @@ export class Game {
     if (!target) return
     this.world.setBlock(target.x, target.y, target.z, AIR)
     this.editedCells.add(`${target.x},${target.y},${target.z}`)
+    // Water flows into the gap if there is a source nearby.
+    this.flowWater(target.x, target.y, target.z)
     // Collect the broken block into the inventory.
     if (this.blockCounts[target.id] !== undefined) {
       this.blockCounts[target.id]++
@@ -732,6 +779,7 @@ export class Game {
   pickStrawberry(x, y, z) {
     this.world.setBlock(x, y, z, AIR)
     this.editedCells.add(`${x},${y},${z}`)
+    this.flowWater(x, y, z)
     this.blockCounts[STRAWBERRY] = (this.blockCounts[STRAWBERRY] || 0) + 1
     this.refreshInventory()
     this.markDirty(x, z)
