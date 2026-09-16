@@ -3,7 +3,8 @@
 // We generate at runtime on a canvas so the game works fully offline.
 
 import { BLOCKS, GRASS, DIRT, STONE, SAND, WOOD, LEAVES, GLASS, WATER,
-         PLANKS, COBBLESTONE, BRICK, BEDROCK, TABLE, CHAIR, TOILET, SINK } from './blocks.js'
+         PLANKS, COBBLESTONE, BRICK, BEDROCK, TABLE, CHAIR, TOILET, SINK,
+         WIRE, MOTOR, PISTON } from './blocks.js'
 
 const TILE = 16 // pixels per block face
 const ATLAS_COLS = 8
@@ -117,6 +118,72 @@ export function buildAtlas() {
   // Grass gets per-face
   const grassFaces = drawGrass()
   slots[GRASS] = grassFaces
+
+  // Wire: dark base with a red conducting band and edge nodes.
+  {
+    const slot = assign(WIRE, 'all')
+    const rng = mulberry32(63)
+    for (let px = 0; px < TILE; px++) {
+      for (let py = 0; py < TILE; py++) {
+        ctx.fillStyle = shade('#333', (rng() - 0.5) * 24)
+        ctx.fillRect(slot.x + px, slot.y + py, 1, 1)
+      }
+    }
+    ctx.fillStyle = '#c62828'
+    ctx.fillRect(slot.x, slot.y + 6, TILE, 3)
+    ctx.fillStyle = '#e53935'
+    ctx.fillRect(slot.x, slot.y + 6, TILE, 1)
+    ctx.fillStyle = '#c62828'
+    ctx.fillRect(slot.x + 2, slot.y, 2, TILE)
+    ctx.fillRect(slot.x + TILE - 4, slot.y, 2, TILE)
+    slots[WIRE] = { top: slot, bottom: slot, side: slot }
+  }
+
+  // Motor: steel body with an orange rotor and a dark axle cross.
+  {
+    const slot = assign(MOTOR, 'all')
+    const rng = mulberry32(77)
+    for (let px = 0; px < TILE; px++) {
+      for (let py = 0; py < TILE; py++) {
+        ctx.fillStyle = shade('#8a8f94', (rng() - 0.5) * 22)
+        ctx.fillRect(slot.x + px, slot.y + py, 1, 1)
+      }
+    }
+    ctx.fillStyle = '#ef6c00'
+    for (let px = 3; px < TILE - 3; px++) {
+      for (let py = 3; py < TILE - 3; py++) {
+        ctx.fillRect(slot.x + px, slot.y + py, 1, 1)
+      }
+    }
+    ctx.fillStyle = '#424242'
+    ctx.fillRect(slot.x + 7, slot.y + 3, 2, TILE - 6)
+    ctx.fillRect(slot.x + 3, slot.y + 7, TILE - 6, 2)
+    slots[MOTOR] = { top: slot, bottom: slot, side: slot }
+  }
+
+  // Piston: light steel with a piston face plate and a rim.
+  {
+    const slot = assign(PISTON, 'all')
+    const rng = mulberry32(91)
+    for (let px = 0; px < TILE; px++) {
+      for (let py = 0; py < TILE; py++) {
+        ctx.fillStyle = shade('#b0b7bd', (rng() - 0.5) * 20)
+        ctx.fillRect(slot.x + px, slot.y + py, 1, 1)
+      }
+    }
+    ctx.fillStyle = '#6d7278'
+    for (let px = 2; px < TILE - 2; px++) {
+      ctx.fillRect(slot.x + px, slot.y + 2, 1, 1)
+      ctx.fillRect(slot.x + px, slot.y + TILE - 3, 1, 1)
+    }
+    for (let py = 2; py < TILE - 2; py++) {
+      ctx.fillRect(slot.x + 2, slot.y + py, 1, 1)
+      ctx.fillRect(slot.x + TILE - 3, slot.y + py, 1, 1)
+    }
+    ctx.fillStyle = '#e0e4e8'
+    ctx.fillRect(slot.x + 5, slot.y + 5, TILE - 10, TILE - 10)
+    slots[PISTON] = { top: slot, bottom: slot, side: slot }
+  }
 
   return { canvas, slots }
 }
