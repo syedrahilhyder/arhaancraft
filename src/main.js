@@ -2,11 +2,12 @@
 
 import * as THREE from 'three'
 import './style.css'
-import { World, CHUNK_SIZE, WORLD_HEIGHT } from './world.js'
+import { World, CHUNK_SIZE, WORLD_HEIGHT, SEA_LEVEL } from './world.js'
 import { buildAtlas } from './texture.js'
 import { buildChunkGeometry } from './mesher.js'
 import { buildFurnitureGroup, isFurniture } from './furniture.js'
 import { Player } from './player.js'
+import { Sheep } from './sheep.js'
 import { InputController } from './input.js'
 import { BLOCKS, PLACEABLE, AIR, WATER, GRASS, DIRT, STONE, SAND, WOOD, LEAVES,
          GLASS, PLANKS, COBBLESTONE, BRICK, TABLE, CHAIR, TOILET, SINK, ITEM_ICONS, blockName } from './blocks.js'
@@ -52,6 +53,10 @@ export class Game {
 
     // Generate initial world around player
     this.generateAroundPlayer()
+
+    // Wanderers
+    this.sheep = []
+    this.spawnSheep()
 
     this.clock = new THREE.Clock()
     this.bindEvents()
@@ -187,6 +192,27 @@ export class Game {
           this.rebuildChunk(cx, cz)
         }
       }
+    }
+  }
+
+  spawnSheep() {
+    // Place a handful of sheep on dry land near the player's spawn.
+    const spawnX = this.player.position.x
+    const spawnZ = this.player.position.z
+    const count = 6
+    let placed = 0
+    let attempts = 0
+    while (placed < count && attempts < 200) {
+      attempts++
+      const angle = Math.random() * Math.PI * 2
+      const r = 6 + Math.random() * 14
+      const x = Math.floor(spawnX + Math.cos(angle) * r)
+      const z = Math.floor(spawnZ + Math.sin(angle) * r)
+      if (this.world.heightAt(x, z) < SEA_LEVEL) continue // skip water
+      const sheep = new Sheep(this.world, x, z, placed)
+      this.sheep.push(sheep)
+      this.scene.add(sheep.group)
+      placed++
     }
   }
 
@@ -390,6 +416,9 @@ export class Game {
 
     // Regenerate chunks as player moves
     this.generateAroundPlayer()
+
+    // Animate wandering sheep
+    for (const sheep of this.sheep) sheep.update(dt)
 
     this.renderer.render(this.scene, this.camera)
   }
