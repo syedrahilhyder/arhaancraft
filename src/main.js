@@ -6,11 +6,13 @@ import { World, CHUNK_SIZE, WORLD_HEIGHT, SEA_LEVEL } from './world.js'
 import { buildAtlas } from './texture.js'
 import { buildChunkGeometry } from './mesher.js'
 import { buildFurnitureGroup, isFurniture } from './furniture.js'
+import { buildMechanicalBlock } from './mechanical.js'
 import { Player } from './player.js'
 import { Sheep } from './sheep.js'
 import { InputController } from './input.js'
 import { BLOCKS, PLACEABLE, AIR, WATER, GRASS, DIRT, STONE, SAND, WOOD, LEAVES,
-         GLASS, PLANKS, COBBLESTONE, BRICK, TABLE, CHAIR, TOILET, SINK, ITEM_ICONS, blockName } from './blocks.js'
+         GLASS, PLANKS, COBBLESTONE, BRICK, TABLE, CHAIR, TOILET, SINK,
+         WIRE, MOTOR, PISTON, SWITCH, isMechanical, ITEM_ICONS, blockName } from './blocks.js'
 
 const RENDER_DISTANCE = 3 // chunks in each direction
 const VIEW_RANGE = RENDER_DISTANCE * CHUNK_SIZE
@@ -42,6 +44,8 @@ export class Game {
     this.chunkMeshes = new Map() // key -> mesh
     this.furnitureMeshes = new Map() // key -> group
     this.dirtyChunks = new Set()
+    this.mechBlocks = new Map() // "x,y,z" -> { id, group, setPowered, update }
+    this.switchOn = new Map()   // "x,y,z" -> bool (switch on/off state)
 
     // Inventory
     this.hotbar = []
@@ -57,6 +61,7 @@ export class Game {
     // Wanderers
     this.sheep = []
     this.spawnSheep()
+    this.recomputePower()
 
     this.clock = new THREE.Clock()
     this.bindEvents()
@@ -175,6 +180,11 @@ export class Game {
     placeBtn.addEventListener('mousedown', () => this.doPlace())
     this.breakBtn = breakBtn
     this.placeBtn = placeBtn
+
+    // Use / activate button (toggles the aimed-at switch)
+    const useBtn = document.getElementById('btn-use')
+    useBtn.addEventListener('touchstart', (e) => { e.preventDefault(); this.activateTarget() }, { passive: false })
+    useBtn.addEventListener('mousedown', () => this.activateTarget())
 
     // Inventory toggle button
     const invBtn = document.getElementById('btn-inventory')
@@ -329,6 +339,15 @@ export class Game {
       this.scene.remove(this.furnitureMeshes.get(key))
       this.furnitureMeshes.delete(key)
     }
+    // Remove any mechanical blocks in this chunk.
+    for (const [mkey, m] of [...this.mechBlocks]) {
+      const [mx, , mz] = mkey.split(',').map(Number)
+      if (Math.floor(mx / CHUNK_SIZE) === cx && Math.floor(mz / CHUNK_SIZE) === cz) {
+        this.scene.remove(m.group)
+        this.disposeFurniture(m.group)
+        this.mechBlocks.delete(mkey)
+      }
+    }
 
     // Build merged block mesh
     let hasBlocks = false
@@ -350,6 +369,28 @@ export class Game {
     if (fGroup.children.length > 0) {
       this.scene.add(fGroup)
       this.furnitureMeshes.set(key, fGroup)
+    }
+
+    // Build mechanical blocks for this chunk.
+    this.buildMechForChunk(chunk, cx, cz)
+  }
+
+  buildMechForChunk(chunk, cx, cz) {
+    for (let x = 0; x < CHUNK_SIZE; x++) {
+      for (let z = 0; z < CHUNK_SIZE; z++) {
+        for (let y = 0; y < WORLD_HEIGHT; y++) {
+          const id = chunk.get(x, y, z)
+          if (isMechanical(id)) {
+            const wx = cx * CHUNK_SIZE + x
+            const wz = cz * CHUNK_SIZE + z
+            const mkey = `${wx},${y},${wz}`
+            const model = buildMechanicalBlock(id)
+            model.group.position.set(wx, y, wz)
+            this.scene.add(model.group)
+            this.mechBlocks.set(mkey, { id, group: model.group, setPowered: model.setPowered, update: model.update })
+          }
+        }
+      }
     }
   }
 
@@ -438,6 +479,9 @@ export class Game {
       this.refreshInventory()
     }
     this.markDirty(target.x, target.z)
+    // If a switch was broken, forget its on/off state.
+    if (target.id === SWITCH) this.switchOn.delete(`${target.x},${target.y},${target.z}`)
+    this.recomputePower()
     this.breakBtn.classList.add('active')
     setTimeout(() => this.breakBtn.classList.remove('active'), 120)
   }
@@ -463,6 +507,7 @@ export class Game {
     // spend one from the inventory
     this.blockCounts[id]--
     this.refreshInventory()
+    this.recomputePower()
     this.placeBtn.classList.add('active')
     setTimeout(() => this.placeBtn.classList.remove('active'), 120)
   }
@@ -476,6 +521,51 @@ export class Game {
     return (p.x + hw > minX && p.x - hw < maxX &&
             p.y + 1.8 > minY && p.y < maxY &&
             p.z + hw > minZ && p.z - hw < maxZ)
+  }
+
+  recomputePower() {
+    const DIRS = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]]
+    const powered = new Set()
+    const stack = []
+    // Seed the flood fill from every switch that is ON.
+    for (const [key, on] of this.switchOn) {
+      if (on) { powered.add(key); stack.push(key) }
+    }
+    // Spread power through wire and switch cells.
+    while (stack.length) {
+      const [x, y, z] = stack.pop().split(',').map(Number)
+      for (const [dx, dy, dz] of DIRS) {
+        const nk = `${x + dx},${y + dy},${z + dz}`
+        if (powered.has(nk)) continue
+        const nid = this.world.getBlock(x + dx, y + dy, z + dz)
+        if (nid === WIRE || nid === SWITCH) { powered.add(nk); stack.push(nk) }
+      }
+    }
+    // Apply state: wire/switch are powered when in the set; motors and pistons
+    // are active when a neighbour is powered.
+    for (const [key, b] of this.mechBlocks) {
+      const [x, y, z] = key.split(',').map(Number)
+      let active = powered.has(key)
+      if (!active && (b.id === MOTOR || b.id === PISTON)) {
+        for (const [dx, dy, dz] of DIRS) {
+          if (powered.has(`${x + dx},${y + dy},${z + dz}`)) { active = true; break }
+        }
+      }
+      b.setPowered(active)
+    }
+  }
+
+  toggleSwitch(x, y, z) {
+    const key = `${x},${y},${z}`
+    this.switchOn.set(key, !this.switchOn.get(key))
+    this.recomputePower()
+  }
+
+  activateTarget() {
+    const target = this.getTargetBlock()
+    if (target && target.id === SWITCH) {
+      this.toggleSwitch(target.x, target.y, target.z)
+    }
   }
 
   setupInteraction() {
@@ -531,6 +621,9 @@ export class Game {
 
     // Animate wandering sheep
     for (const sheep of this.sheep) sheep.update(dt)
+
+    // Animate powered mechanical blocks (e.g. spinning motors).
+    for (const [, b] of this.mechBlocks) if (b.update) b.update(dt)
 
     // Keep the shadow-casting sun following the player.
     const sx = this.player.position.x

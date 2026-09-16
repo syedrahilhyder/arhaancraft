@@ -3,7 +3,7 @@
 
 import * as THREE from 'three'
 import { CHUNK_SIZE, WORLD_HEIGHT } from './world.js'
-import { BLOCKS, AIR, WATER, LEAVES, GLASS } from './blocks.js'
+import { BLOCKS, AIR, WATER, LEAVES, GLASS, isMechanical } from './blocks.js'
 import { isFurniture } from './furniture.js'
 
 class EarthMat {
@@ -37,8 +37,10 @@ export function buildChunkGeometry(chunk, world, atlasSlots) {
       for (let y = 0; y < WORLD_HEIGHT; y++) {
         const id = chunk.get(x, y, z)
         if (id === AIR) continue
-        // Furniture is rendered with custom geometry, not the merged mesh
+        // Furniture and mechanical blocks are rendered with custom geometry,
+        // not the merged chunk mesh.
         if (isFurniture(id)) continue
+        if (isMechanical(id)) continue
         const block = BLOCKS[id]
         if (!block) continue
 

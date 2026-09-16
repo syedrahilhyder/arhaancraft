@@ -202,6 +202,7 @@ html, body {
 }
 .action-btn.dig { background: rgba(150, 80, 40, 0.55); }
 .action-btn.place { background: rgba(60, 120, 60, 0.55); }
+.action-btn.use { background: rgba(200, 140, 40, 0.55); }
 .action-btn.inv { background: rgba(70, 90, 140, 0.55); }
 .action-btn.active {
   box-shadow: 0 0 0 3px #fff;

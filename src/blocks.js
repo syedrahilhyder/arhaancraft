@@ -21,6 +21,7 @@ export const BEDROCK = 16
 export const WIRE = 17
 export const MOTOR = 18
 export const PISTON = 19
+export const SWITCH = 20
 
 // Each block: name, whether it's solid, whether it can be walked through
 // For furniture blocks we render custom geometry.
@@ -42,16 +43,17 @@ export const BLOCKS = {
   [COBBLESTONE]:{ id: COBBLESTONE, name: 'Cobblestone', solid: true, transparent: false, color: '#757575' },
   [BRICK]:     { id: BRICK,     name: 'Brick',      solid: true,  transparent: false, color: '#b71c1c' },
   [BEDROCK]:   { id: BEDROCK,   name: 'Bedrock',    solid: true,  transparent: false, color: '#424242' },
-  [WIRE]:      { id: WIRE,      name: 'Wire',       solid: true,  transparent: false, color: '#c62828' },
+  [WIRE]:      { id: WIRE,      name: 'Wire',       solid: false, transparent: false, color: '#c62828' },
   [MOTOR]:     { id: MOTOR,     name: 'Motor',      solid: true,  transparent: false, color: '#ef6c00' },
   [PISTON]:    { id: PISTON,    name: 'Piston',     solid: true,  transparent: false, color: '#b0b7bd' },
+  [SWITCH]:    { id: SWITCH,    name: 'Switch',     solid: true,  transparent: false, color: '#ffb300' },
 }
 
 // Which blocks are placeable / obtainable as items
 export const PLACEABLE = [
   GRASS, DIRT, STONE, SAND, WOOD, LEAVES, GLASS, PLANKS, COBBLESTONE, BRICK,
   TABLE, CHAIR, TOILET, SINK,
-  WIRE, MOTOR, PISTON,
+  WIRE, MOTOR, PISTON, SWITCH,
 ]
 
 // Textures are generated per-block-face in texture.js.
@@ -74,10 +76,16 @@ export const ITEM_ICONS = {
   [WIRE]: '⚡',
   [MOTOR]: '⚙️',
   [PISTON]: '🔩',
+  [SWITCH]: '🔌',
 }
 
 // Display name for HUD / labels
 export function blockName(id) {
   const b = BLOCKS[id]
   return b ? b.name : 'Air'
+}
+
+// Mechanical blocks are rendered as animated 3D models, not merged voxel cubes.
+export function isMechanical(id) {
+  return id === WIRE || id === MOTOR || id === PISTON || id === SWITCH
 }
