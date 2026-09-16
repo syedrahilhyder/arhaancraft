@@ -45,6 +45,8 @@ export class Game {
     this.chunkMeshes = new Map() // key -> mesh
     this.furnitureMeshes = new Map() // key -> group
     this.dirtyChunks = new Set()
+    this.chunkQueue = []            // chunks waiting to be generated, processed a few per frame
+    this.chunkQueueSet = new Set()  // keys already queued, to avoid duplicates
     this.mechBlocks = new Map() // "x,y,z" -> { id, group, setPowered, update }
     this.switchOn = new Map()   // "x,y,z" -> bool (switch on/off state)
     this.berryMeshes = new Map() // "x,y,z" -> Group
@@ -288,11 +290,28 @@ export class Game {
       for (let dz = -RENDER_DISTANCE; dz <= RENDER_DISTANCE; dz++) {
         const cx = pcx + dx, cz = pcz + dz
         const key = this.world.key(cx, cz)
-        if (!this.chunkMeshes.has(key) && !this.world.getChunk(cx, cz)) {
-          this.world.generateChunk(cx, cz)
-          this.rebuildChunk(cx, cz)
+        if (!this.chunkMeshes.has(key) && !this.world.getChunk(cx, cz) && !this.chunkQueueSet.has(key)) {
+          this.chunkQueue.push([cx, cz])
+          this.chunkQueueSet.add(key)
         }
       }
+    }
+  }
+
+  // Generate a bounded batch of queued chunks per frame so that travelling far
+  // from spawn does not hang the render loop on a large synchronous burst.
+  processChunkQueue() {
+    const maxPerFrame = 2
+    let processed = 0
+    while (processed < maxPerFrame && this.chunkQueue.length > 0) {
+      const [cx, cz] = this.chunkQueue.shift()
+      const key = this.world.key(cx, cz)
+      this.chunkQueueSet.delete(key)
+      // Skip if it was created meanwhile (e.g. via an edit or a rebuild).
+      if (this.chunkMeshes.has(key) || this.world.getChunk(cx, cz)) continue
+      this.world.generateChunk(cx, cz)
+      this.rebuildChunk(cx, cz)
+      processed++
     }
   }
 
@@ -652,8 +671,9 @@ export class Game {
     // Update player
     this.player.update(dt, this.input.input)
 
-    // Regenerate chunks as player moves
+    // Regenerate chunks as player moves, a bounded batch per frame
     this.generateAroundPlayer()
+    this.processChunkQueue()
 
     // Animate wandering sheep
     for (const sheep of this.sheep) sheep.update(dt)
