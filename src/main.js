@@ -76,6 +76,8 @@ export class Game {
     this.renderer = new THREE.WebGLRenderer({ antialias: true })
     this.renderer.setSize(window.innerWidth, window.innerHeight)
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+    this.renderer.shadowMap.enabled = true
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap
     document.getElementById('app').appendChild(this.renderer.domElement)
 
     // Lighting
@@ -83,13 +85,31 @@ export class Game {
     this.scene.add(ambient)
     const sun = new THREE.DirectionalLight(0xffffff, 0.8)
     sun.position.set(50, 100, 30)
+    sun.castShadow = true
+    sun.shadow.mapSize.set(1024, 1024)
+    sun.shadow.camera.near = 5
+    sun.shadow.camera.far = 200
+    const s = 60
+    sun.shadow.camera.left = -s
+    sun.shadow.camera.right = s
+    sun.shadow.camera.top = s
+    sun.shadow.camera.bottom = -s
     this.scene.add(sun)
+    this.sun = sun
+    this.scene.add(sun.target)
     const fill = new THREE.DirectionalLight(0xffffff, 0.3)
     fill.position.set(-30, 50, -40)
     this.scene.add(fill)
 
     // Raycaster for block targeting
     this.raycaster = new THREE.Raycaster()
+    // White outline showing the block currently aimed at.
+    this.targetBox = new THREE.LineSegments(
+      new THREE.EdgesGeometry(new THREE.BoxGeometry(1.001, 1.001, 1.001)),
+      new THREE.LineBasicMaterial({ color: 0xffffff, toneMapped: false })
+    )
+    this.targetBox.visible = false
+    this.scene.add(this.targetBox)
   }
 
   initInventory() {
@@ -286,6 +306,7 @@ export class Game {
       const z = Math.floor(spawnZ + Math.sin(angle) * r)
       if (this.world.heightAt(x, z) < SEA_LEVEL) continue // skip water
       const sheep = new Sheep(this.world, x, z, placed)
+      sheep.group.traverse((o) => { if (o.isMesh) o.castShadow = true })
       this.sheep.push(sheep)
       this.scene.add(sheep.group)
       placed++
@@ -315,6 +336,8 @@ export class Game {
     if (geo.attributes.position.count > 0) {
       const mesh = new THREE.Mesh(geo, this.material)
       mesh.position.set(cx * CHUNK_SIZE, 0, cz * CHUNK_SIZE)
+      mesh.castShadow = true
+      mesh.receiveShadow = true
       this.scene.add(mesh)
       this.chunkMeshes.set(key, mesh)
       hasBlocks = true
@@ -472,6 +495,16 @@ export class Game {
     this._hintTimer = setTimeout(() => el.classList.remove('show'), 4000)
   }
 
+  updateTargetHighlight() {
+    const target = this.getTargetBlock()
+    if (target) {
+      this.targetBox.visible = true
+      this.targetBox.position.set(target.x + 0.5, target.y + 0.5, target.z + 0.5)
+    } else {
+      this.targetBox.visible = false
+    }
+  }
+
   bindEvents() {
     window.addEventListener('resize', () => {
       this.camera.aspect = window.innerWidth / window.innerHeight
@@ -498,6 +531,15 @@ export class Game {
 
     // Animate wandering sheep
     for (const sheep of this.sheep) sheep.update(dt)
+
+    // Keep the shadow-casting sun following the player.
+    const sx = this.player.position.x
+    const sz = this.player.position.z
+    this.sun.position.set(sx + 50, 100, sz + 30)
+    this.sun.target.position.set(sx, 0, sz)
+
+    // Highlight the block being aimed at.
+    this.updateTargetHighlight()
 
     this.renderer.render(this.scene, this.camera)
   }
