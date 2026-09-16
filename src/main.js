@@ -17,11 +17,15 @@ import { BLOCKS, PLACEABLE, AIR, WATER, GRASS, DIRT, STONE, SAND, WOOD, LEAVES,
 
 const RENDER_DISTANCE = 3 // chunks in each direction
 const VIEW_RANGE = RENDER_DISTANCE * CHUNK_SIZE
+const SAVE_KEY = 'arhaancraft-save-v1'
 
 export class Game {
   constructor() {
     this.setupScene()
-    this.world = new World()
+    // Restore saved progress before the world is generated so the seed, block
+    // edits and player position are applied from the start.
+    const save = this.loadGame()
+    this.world = new World(save ? save.seed : undefined)
     this.atlas = buildAtlas()
 
     // Pre-build a texture from the atlas canvas for the merged mesh
@@ -39,6 +43,11 @@ export class Game {
 
     // Player spawn
     this.player = new Player(this.world, this.camera)
+    if (save) {
+      this.player.position.set(save.player.x, save.player.y, save.player.z)
+      this.player.yaw = save.player.yaw
+      this.player.pitch = save.player.pitch
+    }
 
     this.input = new InputController()
 
@@ -50,11 +59,28 @@ export class Game {
     this.mechBlocks = new Map() // "x,y,z" -> { id, group, setPowered, update }
     this.switchOn = new Map()   // "x,y,z" -> bool (switch on/off state)
     this.berryMeshes = new Map() // "x,y,z" -> Group
+    // Every cell the player has edited (placed/removed/picked), replayed on load.
+    this.editedCells = new Set(save ? Object.keys(save.edits || {}) : [])
+    // Saved block edits grouped per chunk, applied when each chunk is generated.
+    this.editsByChunk = new Map()
+    if (save) {
+      for (const [key, id] of Object.entries(save.edits || {})) {
+        const [x, y, z] = key.split(',').map(Number)
+        const ck = this.world.key(Math.floor(x / CHUNK_SIZE), Math.floor(z / CHUNK_SIZE))
+        if (!this.editsByChunk.has(ck)) this.editsByChunk.set(ck, [])
+        this.editsByChunk.get(ck).push([x, y, z, id])
+      }
+    }
 
     // Inventory
     this.hotbar = []
     this.selectedSlot = 0
     this.initInventory()
+    if (save) {
+      this.blockCounts = { ...this.blockCounts, ...save.blockCounts }
+      this.activeBlock = save.activeBlock
+      this.selectedSlot = save.selectedSlot
+    }
 
     this.setupUI()
     this.setupInteraction()
@@ -71,7 +97,7 @@ export class Game {
     this.bindEvents()
     this.animate()
 
-    this.showHint('Move with the joystick, drag to look, tap to place/break blocks!')
+    this.showHint(save ? 'Progress loaded!' : 'Move with the joystick, drag to look, tap to place/break blocks!')
   }
 
   setupScene() {
@@ -282,6 +308,58 @@ export class Game {
     this.refreshInventory()
   }
 
+  // --- Persistence ---
+  saveGame() {
+    const edits = {}
+    for (const key of this.editedCells) {
+      const [x, y, z] = key.split(',').map(Number)
+      // Record the final state, including AIR for broken/removed blocks, so a
+      // break is replayed as a hole instead of regenerating the default block.
+      edits[key] = this.world.getBlock(x, y, z)
+    }
+    const data = {
+      version: 1,
+      seed: this.world.seed,
+      edits,
+      player: {
+        x: this.player.position.x,
+        y: this.player.position.y,
+        z: this.player.position.z,
+        yaw: this.player.yaw,
+        pitch: this.player.pitch,
+      },
+      blockCounts: this.blockCounts,
+      activeBlock: this.activeBlock,
+      selectedSlot: this.selectedSlot,
+      switchOn: Object.fromEntries(this.switchOn),
+    }
+    try {
+      localStorage.setItem(SAVE_KEY, JSON.stringify(data))
+    } catch (e) {
+      // Storage full or unavailable; progress just won't persist this time.
+    }
+  }
+
+  loadGame() {
+    try {
+      const raw = localStorage.getItem(SAVE_KEY)
+      if (!raw) return null
+      const data = JSON.parse(raw)
+      if (!data || data.version !== 1) return null
+      return data
+    } catch (e) {
+      return null
+    }
+  }
+
+  // Apply any saved block edits that live in this chunk. Called right after a
+  // chunk is generated, before its mesh is built.
+  applyChunkEdits(cx, cz) {
+    const edits = this.editsByChunk.get(this.world.key(cx, cz))
+    if (!edits) return
+    for (const [x, y, z, id] of edits) this.world.setBlock(x, y, z, id)
+  }
+
   // --- Chunk management ---
   generateAroundPlayer() {
     const pcx = Math.floor(this.player.position.x / CHUNK_SIZE)
@@ -310,9 +388,13 @@ export class Game {
       // Skip if it was created meanwhile (e.g. via an edit or a rebuild).
       if (this.chunkMeshes.has(key) || this.world.getChunk(cx, cz)) continue
       this.world.generateChunk(cx, cz)
+      this.applyChunkEdits(cx, cz)
       this.rebuildChunk(cx, cz)
       processed++
     }
+    // Once the queued chunks have all built, refresh the power network so
+    // restored switches and motors reflect their saved states.
+    if (processed > 0 && this.chunkQueue.length === 0) this.recomputePower()
   }
 
   spawnSheep() {
@@ -518,6 +600,7 @@ export class Game {
     const target = this.getTargetBlock()
     if (!target) return
     this.world.setBlock(target.x, target.y, target.z, AIR)
+    this.editedCells.add(`${target.x},${target.y},${target.z}`)
     // Collect the broken block into the inventory.
     if (this.blockCounts[target.id] !== undefined) {
       this.blockCounts[target.id]++
@@ -548,6 +631,7 @@ export class Game {
     if (this.world.getBlock(px, py, pz) !== AIR && this.world.getBlock(px, py, pz) !== WATER) return
     // water gets replaced
     this.world.setBlock(px, py, pz, id)
+    this.editedCells.add(`${px},${py},${pz}`)
     this.markDirty(px, pz)
     // spend one from the inventory
     this.blockCounts[id]--
@@ -618,6 +702,7 @@ export class Game {
 
   pickStrawberry(x, y, z) {
     this.world.setBlock(x, y, z, AIR)
+    this.editedCells.add(`${x},${y},${z}`)
     this.blockCounts[STRAWBERRY] = (this.blockCounts[STRAWBERRY] || 0) + 1
     this.refreshInventory()
     this.markDirty(x, z)
@@ -656,6 +741,15 @@ export class Game {
       this.camera.updateProjectionMatrix()
       this.renderer.setSize(window.innerWidth, window.innerHeight)
     })
+    // Persist progress when the page is hidden, closed, or navigated away.
+    const persist = () => this.saveGame()
+    window.addEventListener('pagehide', persist)
+    window.addEventListener('beforeunload', persist)
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') persist()
+    })
+    // Periodic autosave so progress survives even if the tab is killed.
+    setInterval(persist, 10000)
   }
 
   animate() {

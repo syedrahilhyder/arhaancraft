@@ -30,9 +30,9 @@ export class Chunk {
 }
 
 export class World {
-  constructor() {
+  constructor(seed) {
     this.chunks = new Map()
-    this.seed = Math.floor(Math.random() * 1e9)
+    this.seed = seed !== undefined ? seed : Math.floor(Math.random() * 1e9)
   }
 
   key(cx, cz) { return cx + ',' + cz }
